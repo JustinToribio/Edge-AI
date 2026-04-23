@@ -1,13 +1,15 @@
 import asyncio
 import io
 import os
+import pathlib
+import shutil
 import time
 from contextlib import asynccontextmanager
 
 import httpx
 import numpy as np
 import onnxruntime as ort
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile
 from PIL import Image
 
 NODE_ID          = os.getenv("NODE_ID", "node-a")
@@ -59,6 +61,16 @@ def status():
         "model_version": state["model_version"],
         "uptime_seconds": round(time.time() - state["start_time"], 1),
     }
+
+
+@app.post("/update-model")
+async def update_model(file: UploadFile = File(...), version: str = Form(...)):
+    path = pathlib.Path(f"models/{NODE_ID}_{version}.onnx")
+    with path.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    state["session"] = ort.InferenceSession(str(path))
+    state["model_version"] = version
+    return {"status": "updated", "version": version, "path": str(path)}
 
 
 @app.post("/infer")
