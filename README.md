@@ -111,7 +111,7 @@ docker compose logs -f
 With the stack running, execute the demo script from the project root:
 
 ```bash
-python demo.py
+python3 demo.py
 ```
 
 The script walks through:
