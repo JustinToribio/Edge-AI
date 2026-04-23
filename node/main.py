@@ -1,10 +1,12 @@
 import asyncio
+import hashlib
 import io
 import os
 import pathlib
 import shutil
 import time
 from contextlib import asynccontextmanager
+from typing import Any, Dict
 
 import httpx
 import numpy as np
@@ -16,6 +18,9 @@ NODE_ID          = os.getenv("NODE_ID", "node-a")
 MODEL_PATH       = os.getenv("MODEL_PATH", "models/mobilenetv2.onnx")
 ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", "")
 SELF_URL         = os.getenv("SELF_URL", "")
+PEERS: list[str] = [p for p in os.getenv("PEERS", "").split(",") if p]
+
+lww_store: Dict[str, Any] = {}
 
 state = {}
 
@@ -73,19 +78,52 @@ async def update_model(file: UploadFile = File(...), version: str = Form(...)):
     return {"status": "updated", "version": version, "path": str(path)}
 
 
+def merge(remote_store: dict) -> None:
+    """LWW-Map merge: keep entry with highest timestamp."""
+    for key, remote_val in remote_store.items():
+        local_val = lww_store.get(key)
+        if local_val is None or remote_val["timestamp"] > local_val["timestamp"]:
+            lww_store[key] = remote_val
+
+
+async def _gossip(key: str, entry: dict) -> None:
+    async with httpx.AsyncClient() as client:
+        for peer in PEERS:
+            try:
+                await client.post(f"{peer}/sync", json={key: entry}, timeout=5)
+            except Exception:
+                pass  # peer offline — will converge on next sync
+
+
 @app.post("/infer")
 async def infer(file: UploadFile = File(...)):
     data = await file.read()
+    img_hash = hashlib.sha256(data).hexdigest()[:12]
     tensor = preprocess(data)
     input_name = state["session"].get_inputs()[0].name
     logits = state["session"].run(None, {input_name: tensor})[0][0]
     top5_idx = np.argsort(logits)[-5:][::-1]
-    results = [
+    predictions = [
         {"class": state["classes"][i], "score": round(float(logits[i]), 4)}
         for i in top5_idx
     ]
+    entry = {"predictions": predictions, "timestamp": time.time(), "node_id": NODE_ID}
+    key = f"{NODE_ID}:{img_hash}"
+    lww_store[key] = entry
+    asyncio.create_task(_gossip(key, entry))
     return {
         "node_id": NODE_ID,
         "model_version": state["model_version"],
-        "predictions": results,
+        "predictions": predictions,
     }
+
+
+@app.post("/sync")
+def sync(remote_store: dict) -> dict:
+    merge(remote_store)
+    return {"status": "merged", "store_size": len(lww_store)}
+
+
+@app.get("/store")
+def get_store() -> dict:
+    return lww_store
