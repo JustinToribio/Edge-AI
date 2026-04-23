@@ -22,7 +22,7 @@ A minimal but complete edge AI infrastructure system that simulates a fleet of e
 - **Hot model deployment** — the orchestrator pushes a new ONNX model to all registered nodes without restarting containers
 - **Device registry** — nodes auto-register with the orchestrator on startup; the registry tracks node address and current model version
 - **LWW-Map CRDT sync** — after each inference, nodes gossip results to peers using a Last-Write-Wins Map; all nodes converge to identical state without a central coordinator
-- **Containerized edge simulation** — each node runs as an isolated Docker container; the same image would run on an edge device (i.e. Jetson Nano, Raspberry Pi etc...) fleet with only an execution provider swap
+- **Containerized edge simulation** — each node runs as an isolated Docker container; the same image would run on an edge device fleet (i.e. Jetson Nano, Raspberry Pi etc...) with only an execution provider swap
 
 ## Tech stack
 
