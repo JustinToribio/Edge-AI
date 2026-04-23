@@ -5,3 +5,4 @@ httpx
 pillow
 numpy
 pytest
+python-multipart
