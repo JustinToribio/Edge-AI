@@ -1,0 +1,62 @@
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - orchestrator_store:/app/orchestrator/models
+
+  node-a:
+    build:
+      context: .
+      dockerfile: node/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./models:/app/models
+      - ./tests:/app/tests
+    environment:
+      - NODE_ID=node-a
+      - PEERS=http://node-b:8001,http://node-c:8001
+      - ORCHESTRATOR_URL=http://orchestrator:8000
+      - SELF_URL=http://node-a:8001
+    depends_on:
+      - orchestrator
+
+  node-b:
+    build:
+      context: .
+      dockerfile: node/Dockerfile
+    ports:
+      - "8002:8001"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - NODE_ID=node-b
+      - PEERS=http://node-a:8001,http://node-c:8001
+      - ORCHESTRATOR_URL=http://orchestrator:8000
+      - SELF_URL=http://node-b:8001
+    depends_on:
+      - orchestrator
+
+  node-c:
+    build:
+      context: .
+      dockerfile: node/Dockerfile
+    ports:
+      - "8003:8001"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - NODE_ID=node-c
+      - PEERS=http://node-a:8001,http://node-b:8001
+      - ORCHESTRATOR_URL=http://orchestrator:8000
+      - SELF_URL=http://node-c:8001
+    depends_on:
+      - orchestrator
+
+volumes:
+  orchestrator_store:
